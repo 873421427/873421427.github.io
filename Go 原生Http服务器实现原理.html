@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Go 原生Http服务器实现原理 | zzt&#39;s blog</title>
+    <meta name="description" content="vuepress blog">
+    
+    
+    <link rel="preload" href="/assets/css/0.styles.a4238b5b.css" as="style"><link rel="preload" href="/assets/js/app.a5989d02.js" as="script"><link rel="preload" href="/assets/js/2.cb6da756.js" as="script"><link rel="preload" href="/assets/js/5.1c0f6fdf.js" as="script"><link rel="prefetch" href="/assets/js/10.3fa139c5.js"><link rel="prefetch" href="/assets/js/3.4e51276d.js"><link rel="prefetch" href="/assets/js/4.c24ba69f.js"><link rel="prefetch" href="/assets/js/6.ed550d38.js"><link rel="prefetch" href="/assets/js/7.a272f739.js"><link rel="prefetch" href="/assets/js/8.046049be.js"><link rel="prefetch" href="/assets/js/9.3cfbc52c.js">
+    <link rel="stylesheet" href="/assets/css/0.styles.a4238b5b.css">
+  </head>
+  <body>
+    <div id="app" data-server-rendered="true"><div class="theme-container"><header class="navbar"><div class="sidebar-button"><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" role="img" viewBox="0 0 448 512" class="icon"><path fill="currentColor" d="M436 124H12c-6.627 0-12-5.373-12-12V80c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12zm0 160H12c-6.627 0-12-5.373-12-12v-32c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12zm0 160H12c-6.627 0-12-5.373-12-12v-32c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12z"></path></svg></div> <a href="/" class="home-link router-link-active"><!----> <span class="site-name">zzt's blog</span></a> <div class="links"><div class="search-box"><input aria-label="Search" autocomplete="off" spellcheck="false" value=""> <!----></div> <nav class="nav-links can-hide"><div class="nav-item"><a href="/" class="nav-link">homepage</a></div><div class="nav-item"><a href="/blogs/" class="nav-link">blogs</a></div> <!----></nav></div></header> <div class="sidebar-mask"></div> <aside class="sidebar"><nav class="nav-links"><div class="nav-item"><a href="/" class="nav-link">homepage</a></div><div class="nav-item"><a href="/blogs/" class="nav-link">blogs</a></div> <!----></nav>  <ul class="sidebar-links"><li><section class="sidebar-group depth-0"><p class="sidebar-heading open"><span>home</span> <!----></p> <ul class="sidebar-links sidebar-group-items"><li><a href="/Golang Docker部署实践.html" class="sidebar-link">Golang Docker部署实践</a></li><li><a href="/Go 终于可以不翻墙下载golang.org 包了.html" class="sidebar-link">Go 终于可以不翻墙下载golang.org 包了</a></li><li><a href="/Go 原生Http服务器实现原理.html" class="active sidebar-link">Go 原生Http服务器实现原理</a></li></ul></section></li></ul> </aside> <main class="page"> <div class="theme-default-content content__default"><h1 id="go-原生http服务器实现原理"><a href="#go-原生http服务器实现原理" aria-hidden="true" class="header-anchor">#</a> Go 原生Http服务器实现原理</h1> <p>在Go中使用及其简单的代码即可开启一个web服务。如下：</p> <div class="language- extra-class"><pre class="language-text"><code>//开启web服务
+func test(){
+    http.HandleFunc(&quot;/&quot;, sayHello)
+    err := http.ListenAndServe(&quot;:9090&quot;,nil)
+    if err!=nil {
+        log.Fatal(&quot;ListenAndServer:&quot;,err)
+    }
+}
+
+func sayHello(w http.ResponseWriter, r *http.Request){
+    r.ParseForm()
+    fmt.Println(&quot;path&quot;,r.URL.Path)
+    fmt.Println(&quot;scheme&quot;,r.URL.Scheme)
+
+    fmt.Fprintf(w, &quot;Hello Guest!&quot;)
+}复制代码
+</code></pre></div><p>在使用<code>ListenAndServe</code>这个方法时，系统就会给我们指派一个路由器，<code>DefaultServeMux</code>是系统默认使用的路由器，如果<code>ListenAndServe</code>这个方法的第2个参数传入nil，系统就会默认使用<code>DefaultServeMux</code>。当然，这里也可以传入自定义的路由器。</p> <p>先来看<code>http.HandleFunc(&quot;/&quot;, sayHello)</code>，从<code>HandleFunc</code>方法点进去，如下：</p> <div class="language- extra-class"><pre class="language-text"><code>func HandleFunc(pattern string, handler func(ResponseWriter, *Request)) {
+    DefaultServeMux.HandleFunc(pattern, handler)
+}复制代码
+</code></pre></div><p>在这里调用了<code>DefaultServeMux</code>的<code>HandleFunc</code>方法，这个方法有两个参数，<code>pattern</code>是匹配的路由规则，<code>handler</code>表示这个路由规则对应的处理方法，并且这个处理方法有两个参数。</p> <p>在我们书写的代码示例中，<code>pattern</code>对应<code>/</code>，<code>handler</code>对应<code>sayHello</code>，当我们在浏览器中输入<code>http://localhost:9090</code>时，就会触发<code>sayHello</code>方法。</p> <p>我们再顺着<code>DefaultServeMux</code>的<code>HandleFunc</code>方法继续点下去，如下：</p> <div class="language- extra-class"><pre class="language-text"><code>func (mux *ServeMux) HandleFunc(pattern string, handler func(ResponseWriter, *Request)) {
+    mux.Handle(pattern, HandlerFunc(handler))
+}
+复制代码
+</code></pre></div><p>在这个方法中，路由器又调用了<code>Handle</code>方法，注意这个<code>Handle</code>方法的第2个参数，将之前传入的<code>handler</code>这个响应方法强制转换成了<code>HandlerFunc</code>类型。</p> <p>这个<code>HandlerFunc</code>类型到底是个什么呢？如下：</p> <div class="language- extra-class"><pre class="language-text"><code>type HandlerFunc func(ResponseWriter, *Request)
+复制代码
+</code></pre></div><p>看来和我们定义的<code>SayHello</code>方法的类型都差不多。但是！！！
+这个<code>HandlerFunc</code>默认实现了<code>ServeHTTP</code>接口！这样<code>HandlerFunc</code>对象就有了<code>ServeHTTP</code>方法！如下：</p> <div class="language- extra-class"><pre class="language-text"><code>// ServeHTTP calls f(w, r).
+func (f HandlerFunc) ServeHTTP(w ResponseWriter, r *Request) {
+    f(w, r)
+}
+复制代码
+</code></pre></div><p>这个细节是十分重要的，因为这一步关乎到当路由规则匹配时，相应的响应方法是否会被调用的问题！这个方法的调用时机会在下一小节中讲到。</p> <p>接下来，我们返回去继续看<code>mux</code>的<code>Handle</code>方法，也就是这段代码<code>mux.Handle(pattern, HandlerFunc(handler))</code>。这段代码做了哪些事呢？源码如下：</p> <div class="language- extra-class"><pre class="language-text"><code>func (mux *ServeMux) Handle(pattern string, handler Handler) {
+    mux.mu.Lock()
+    defer mux.mu.Unlock()
+
+    if pattern == &quot;&quot; {
+        panic(&quot;http: invalid pattern &quot; + pattern)
+    }
+    if handler == nil {
+        panic(&quot;http: nil handler&quot;)
+    }
+    if mux.m[pattern].explicit {
+        panic(&quot;http: multiple registrations for &quot; + pattern)
+    }
+
+    if mux.m == nil {
+        mux.m = make(map[string]muxEntry)
+    }
+    mux.m[pattern] = muxEntry{explicit: true, h: handler, pattern: pattern}
+
+    if pattern[0] != '/' {
+        mux.hosts = true
+    }
+
+    // Helpful behavior:
+    // If pattern is /tree/, insert an implicit permanent redirect for /tree.
+    // It can be overridden by an explicit registration.
+    n := len(pattern)
+    if n &gt; 0 &amp;&amp; pattern[n-1] == '/' &amp;&amp; !mux.m[pattern[0:n-1]].explicit {
+        // If pattern contains a host name, strip it and use remaining
+        // path for redirect.
+        path := pattern
+        if pattern[0] != '/' {
+            // In pattern, at least the last character is a '/', so
+            // strings.Index can't be -1.
+            path = pattern[strings.Index(pattern, &quot;/&quot;):]
+        }
+        url := &amp;url.URL{Path: path}
+        mux.m[pattern[0:n-1]] = muxEntry{h: RedirectHandler(url.String(), StatusMovedPermanently), pattern: pattern}
+    }
+}
+复制代码
+</code></pre></div><p>代码挺多，其实主要就做了一件事，向<code>DefaultServeMux</code>的<code>map[string]muxEntry</code>中增加对应的路由规则和<code>handler</code>。</p> <p><code>map[string]muxEntry</code>是个什么鬼？</p> <p><code>map</code>是一个字典对象，它保存的是<code>key-value</code>。
+<code>[string]</code>表示这个字典的<code>key</code>是<code>string</code>类型的，这个<code>key</code>值会保存我们的路由规则。
+<code>muxEntry</code>是一个实例对象，这个对象内保存了路由规则对应的处理方法。</p> <p>找到相应代码，如下：</p> <div class="language- extra-class"><pre class="language-text"><code>//路由器
+type ServeMux struct {
+    mu    sync.RWMutex
+    m     map[string]muxEntry //路由规则，一个string对应一个mux实例对象，map的key就是注册的路由表达式(string类型的)
+    hosts bool // whether any patterns contain hostnames
+}
+
+//muxEntry
+type muxEntry struct {
+    explicit bool
+    h        Handler //这个路由表达式对应哪个handler
+    pattern  string
+}
+
+//路由响应方法
+type Handler interface {
+    ServeHTTP(ResponseWriter, *Request)  //handler的路由实现器
+}
+复制代码
+</code></pre></div><p><code>ServeMux</code>就是这个系统默认的路由器。</p> <p>最后，总结一下这个部分：
+1.调用<code>http.HandleFunc(&quot;/&quot;, sayHello)</code>
+2.调用<code>DefaultServeMux</code>的<code>HandleFunc()</code>，把我们定义的<code>sayHello()</code>包装成<code>HandlerFunc</code>类型
+3.继续调用<code>DefaultServeMux</code>的<code>Handle()</code>，向<code>DefaultServeMux</code>的<code>map[string]muxEntry</code>中增加路由规则和对应的<code>handler</code></p> <p>OK，这部分代码做的事就这么多，第一部分结束。</p> <p>第二部分主要就是研究这句代码<code>err := http.ListenAndServe(&quot;:9090&quot;,nil)</code>，也就是<code>ListenAndServe</code>这个方法。从这个方法点进去，如下：</p> <div class="language- extra-class"><pre class="language-text"><code>func ListenAndServe(addr string, handler Handler) error {
+    server := &amp;Server{Addr: addr, Handler: handler}
+    return server.ListenAndServe()
+}
+复制代码
+</code></pre></div><p>在这个方法中，初始化了一个<code>server</code>对象，然后调用这个<code>server</code>对象的<code>ListenAndServe</code>方法，在这个方法中，如下：</p> <div class="language- extra-class"><pre class="language-text"><code>func (srv *Server) ListenAndServe() error {
+    addr := srv.Addr
+    if addr == &quot;&quot; {
+        addr = &quot;:http&quot;
+    }
+    ln, err := net.Listen(&quot;tcp&quot;, addr)
+    if err != nil {
+        return err
+    }
+    return srv.Serve(tcpKeepAliveListener{ln.(*net.TCPListener)})
+}
+复制代码
+</code></pre></div><p>在这个方法中，调用了<code>net.Listen(&quot;tcp&quot;, addr)</code>，也就是底层用TCP协议搭建了一个服务，然后监控我们设置的端口。</p> <p>代码的最后，调用了<code>srv</code>的<code>Serve</code>方法，如下：</p> <div class="language- extra-class"><pre class="language-text"><code>func (srv *Server) Serve(l net.Listener) error {
+    defer l.Close()
+    if fn := testHookServerServe; fn != nil {
+        fn(srv, l)
+    }
+    var tempDelay time.Duration // how long to sleep on accept failure
+
+    if err := srv.setupHTTP2_Serve(); err != nil {
+        return err
+    }
+
+    srv.trackListener(l, true)
+    defer srv.trackListener(l, false)
+
+    baseCtx := context.Background() // base is always background, per Issue 16220
+    ctx := context.WithValue(baseCtx, ServerContextKey, srv)
+    ctx = context.WithValue(ctx, LocalAddrContextKey, l.Addr())
+    for {
+        rw, e := l.Accept()
+        if e != nil {
+            select {
+            case &lt;-srv.getDoneChan():
+                return ErrServerClosed
+            default:
+            }
+            if ne, ok := e.(net.Error); ok &amp;&amp; ne.Temporary() {
+                if tempDelay == 0 {
+                    tempDelay = 5 * time.Millisecond
+                } else {
+                    tempDelay *= 2
+                }
+                if max := 1 * time.Second; tempDelay &gt; max {
+                    tempDelay = max
+                }
+                srv.logf(&quot;http: Accept error: %v; retrying in %v&quot;, e, tempDelay)
+                time.Sleep(tempDelay)
+                continue
+            }
+            return e
+        }
+        tempDelay = 0
+        c := srv.newConn(rw)
+        c.setState(c.rwc, StateNew) // before Serve can return
+        go c.serve(ctx)
+    }
+}
+复制代码
+</code></pre></div><p>最后3段代码比较重要，也是Go语言支持高并发的体现，如下：</p> <div class="language- extra-class"><pre class="language-text"><code>c := srv.newConn(rw)
+c.setState(c.rwc, StateNew) // before Serve can return
+go c.serve(ctx)
+复制代码
+</code></pre></div><p>上面那一大坨代码，总体意思是进入方法后，首先开了一个<code>for</code>循环，在<code>for</code>循环内时刻Accept请求，请求来了之后，会为每个请求创建一个<code>Conn</code>，然后单独开启一个<code>goroutine</code>，把这个请求的数据当做参数扔给这个<code>Conn</code>去服务：<code>go c.serve()</code>。用户的每一次请求都是在一个新的<code>goroutine</code>去服务，每个请求间相互不影响。</p> <p>在<code>conn</code>的<code>serve</code>方法中，有一句代码很重要，如下：</p> <div class="language- extra-class"><pre class="language-text"><code>serverHandler{c.server}.ServeHTTP(w, w.req)
+复制代码
+</code></pre></div><p>表示<code>serverHandler</code></p> <p>也</p> <p>实现了<code>ServeHTTP</code>接口，<code>ServeHTTP</code>方法实现如下：</p> <div class="language- extra-class"><pre class="language-text"><code>func (sh serverHandler) ServeHTTP(rw ResponseWriter, req *Request) {
+    handler := sh.srv.Handler
+    if handler == nil {
+        handler = DefaultServeMux
+    }
+    if req.RequestURI == &quot;*&quot; &amp;&amp; req.Method == &quot;OPTIONS&quot; {
+        handler = globalOptionsHandler{}
+    }
+    handler.ServeHTTP(rw, req)
+}
+复制代码
+</code></pre></div><p>在这里如果<code>handler</code>为空（这个<code>handler</code>就可以理解为是我们自定义的路由器），就会使用系统默认的<code>DefaultServeMux</code>，代码的最后调用了<code>DefaultServeMux</code>的<code>ServeHTTP()</code></p> <div class="language- extra-class"><pre class="language-text"><code>func (mux *ServeMux) ServeHTTP(w ResponseWriter, r *Request) {
+    if r.RequestURI == &quot;*&quot; {
+        if r.ProtoAtLeast(1, 1) {
+            w.Header().Set(&quot;Connection&quot;, &quot;close&quot;)
+        }
+        w.WriteHeader(StatusBadRequest)
+        return
+    }
+    h, _ := mux.Handler(r)  //这里返回的h是Handler接口对象
+    h.ServeHTTP(w, r)       //调用Handler接口对象的ServeHTTP方法实际上就调用了我们定义的sayHello方法
+}
+复制代码
+</code></pre></div><p>路由器接收到请求之后，如果是<code>*</code>那么关闭链接，如果不是<code>*</code>就调用<code>mux.Handler(r)</code>返回该路由对应的处理<code>Handler</code>，然后执行该<code>handler</code>的<code>ServeHTTP</code>方法，也就是这句代码<code>h.ServeHTTP(w, r)</code>，<code>mux.Handler(r)</code>做了什么呢？如下：</p> <div class="language- extra-class"><pre class="language-text"><code>func (mux *ServeMux) Handler(r *Request) (h Handler, pattern string) {
+    if r.Method != &quot;CONNECT&quot; {
+        if p := cleanPath(r.URL.Path); p != r.URL.Path {
+            _, pattern = mux.handler(r.Host, p)
+            url := *r.URL
+            url.Path = p
+            return RedirectHandler(url.String(), StatusMovedPermanently), pattern
+        }
+    }
+
+    return mux.handler(r.Host, r.URL.Path)
+}
+
+func (mux *ServeMux) handler(host, path string) (h Handler, pattern string) {
+    mux.mu.RLock()
+    defer mux.mu.RUnlock()
+
+    // Host-specific pattern takes precedence over generic ones
+    if mux.hosts {
+        h, pattern = mux.match(host + path)
+    }
+    if h == nil {
+        h, pattern = mux.match(path)
+    }
+    if h == nil {
+        h, pattern = NotFoundHandler(), &quot;&quot;
+    }
+    return
+}
+
+func (mux *ServeMux) match(path string) (h Handler, pattern string) {
+    var n = 0
+    for k, v := range mux.m {  //mux.m就是系统默认路由的map
+        if !pathMatch(k, path) {
+            continue
+        }
+        if h == nil || len(k) &gt; n {
+            n = len(k)
+            h = v.h
+            pattern = v.pattern
+        }
+    }
+    return
+}
+复制代码
+</code></pre></div><p>它会根据用户请求的<code>URL</code>到路由器里面存储的<code>map</code>中匹配，匹配成功就会返回存储的<code>handler</code>，调用这个<code>handler</code>的<code>ServeHTTP()</code>就可以执行到相应的处理方法了，这个处理方法实际上就是我们刚开始定义的<code>sayHello()</code>，只不过这个<code>sayHello()</code>被<code>HandlerFunc</code>又包了一层，因为<code>HandlerFunc</code>实现了<code>ServeHTTP</code>接口，所以在调用<code>HandlerFunc</code>对象的<code>ServeHTTP()</code>时，实际上在<code>ServeHTTP ()</code>的内部调用了我们的<code>sayHello()</code>。</p> <p>总结一下：
+1.调用<code>http.ListenAndServe(&quot;:9090&quot;,nil)</code>
+2.实例化<code>server</code>
+3.调用<code>server</code>的<code>ListenAndServe()</code>
+4.调用<code>server</code>的<code>Serve</code>方法，开启<code>for</code>循环，在循环中Accept请求
+5.对每一个请求实例化一个<code>Conn</code>，并且开启一个<code>goroutine</code>为这个请求进行服务<code>go c.serve()</code>
+6.读取每个请求的内容<code>c.readRequest()</code>
+7.调用<code>serverHandler</code>的<code>ServeHTTP()</code>，如果<code>handler</code>为空，就把<code>handler</code>设置为系统默认的路由器<code>DefaultServeMux</code>
+8.调用<code>handler</code>的<code>ServeHTTP()</code> =&gt;实际上是调用了<code>DefaultServeMux</code>的<code>ServeHTTP()</code>
+9.在<code>ServeHTTP()</code>中会调用路由对应处理<code>handler</code>
+10.在路由对应处理<code>handler</code>中会执行<code>sayHello()</code></p> <p>有一个需要注意的点：
+<code>DefaultServeMux</code>和路由对应的处理方法<code>handler</code>都实现了<code>ServeHTTP</code>接口，他们俩都有<code>ServeHTTP</code>方法，但是方法要达到的目的不同，在<code>DefaultServeMux</code>的<code>ServeHttp()</code>里会执行路由对应的处理<code>handler</code>的<code>ServeHttp()</code>。</p></div> <footer class="page-edit"><!----> <!----></footer> <div class="page-nav"><p class="inner"><span class="prev">
+        ←
+        <a href="/Go 终于可以不翻墙下载golang.org 包了.html" class="prev">
+          Go 终于可以不翻墙下载golang.org 包了
+        </a></span> <!----></p></div> </main></div><div class="global-ui"></div></div>
+    <script src="/assets/js/app.a5989d02.js" defer></script><script src="/assets/js/2.cb6da756.js" defer></script><script src="/assets/js/5.1c0f6fdf.js" defer></script>
+  </body>
+</html>

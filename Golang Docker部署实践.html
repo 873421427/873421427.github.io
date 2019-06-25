@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Golang Docker部署实践 | zzt&#39;s blog</title>
+    <meta name="description" content="vuepress blog">
+    
+    
+    <link rel="preload" href="/assets/css/0.styles.a4238b5b.css" as="style"><link rel="preload" href="/assets/js/app.a5989d02.js" as="script"><link rel="preload" href="/assets/js/2.cb6da756.js" as="script"><link rel="preload" href="/assets/js/7.a272f739.js" as="script"><link rel="prefetch" href="/assets/js/10.3fa139c5.js"><link rel="prefetch" href="/assets/js/3.4e51276d.js"><link rel="prefetch" href="/assets/js/4.c24ba69f.js"><link rel="prefetch" href="/assets/js/5.1c0f6fdf.js"><link rel="prefetch" href="/assets/js/6.ed550d38.js"><link rel="prefetch" href="/assets/js/8.046049be.js"><link rel="prefetch" href="/assets/js/9.3cfbc52c.js">
+    <link rel="stylesheet" href="/assets/css/0.styles.a4238b5b.css">
+  </head>
+  <body>
+    <div id="app" data-server-rendered="true"><div class="theme-container"><header class="navbar"><div class="sidebar-button"><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" role="img" viewBox="0 0 448 512" class="icon"><path fill="currentColor" d="M436 124H12c-6.627 0-12-5.373-12-12V80c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12zm0 160H12c-6.627 0-12-5.373-12-12v-32c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12zm0 160H12c-6.627 0-12-5.373-12-12v-32c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12z"></path></svg></div> <a href="/" class="home-link router-link-active"><!----> <span class="site-name">zzt's blog</span></a> <div class="links"><div class="search-box"><input aria-label="Search" autocomplete="off" spellcheck="false" value=""> <!----></div> <nav class="nav-links can-hide"><div class="nav-item"><a href="/" class="nav-link">homepage</a></div><div class="nav-item"><a href="/blogs/" class="nav-link">blogs</a></div> <!----></nav></div></header> <div class="sidebar-mask"></div> <aside class="sidebar"><nav class="nav-links"><div class="nav-item"><a href="/" class="nav-link">homepage</a></div><div class="nav-item"><a href="/blogs/" class="nav-link">blogs</a></div> <!----></nav>  <ul class="sidebar-links"><li><section class="sidebar-group depth-0"><p class="sidebar-heading open"><span>home</span> <!----></p> <ul class="sidebar-links sidebar-group-items"><li><a href="/Golang Docker部署实践.html" class="active sidebar-link">Golang Docker部署实践</a><ul class="sidebar-sub-headers"><li class="sidebar-sub-header"><a href="/Golang Docker部署实践.html#此教程面向docker新手" class="sidebar-link">此教程面向Docker新手</a></li><li class="sidebar-sub-header"><a href="/Golang Docker部署实践.html#编写dockerfile" class="sidebar-link">编写Dockerfile</a></li><li class="sidebar-sub-header"><a href="/Golang Docker部署实践.html#生成镜像" class="sidebar-link">生成镜像</a></li><li class="sidebar-sub-header"><a href="/Golang Docker部署实践.html#上传镜像到dockerhub" class="sidebar-link">上传镜像到Dockerhub</a></li><li class="sidebar-sub-header"><a href="/Golang Docker部署实践.html#从dockerhub下载镜像" class="sidebar-link">从DockerHub下载镜像</a></li><li class="sidebar-sub-header"><a href="/Golang Docker部署实践.html#运行镜像" class="sidebar-link">运行镜像</a></li></ul></li><li><a href="/Go 终于可以不翻墙下载golang.org 包了.html" class="sidebar-link">Go 终于可以不翻墙下载golang.org 包了</a></li><li><a href="/Go 原生Http服务器实现原理.html" class="sidebar-link">Go 原生Http服务器实现原理</a></li></ul></section></li></ul> </aside> <main class="page"> <div class="theme-default-content content__default"><h1 id="golang-docker部署实践"><a href="#golang-docker部署实践" aria-hidden="true" class="header-anchor">#</a> Golang Docker部署实践</h1> <h2 id="此教程面向docker新手"><a href="#此教程面向docker新手" aria-hidden="true" class="header-anchor">#</a> 此教程面向Docker新手</h2> <p>容器技术为服务的可扩展和部署提供了很大便利。
+比如使用nginx就可以根据流量的大小帮你自动的增加或者减少容器
+对于部署来说，您不必再对每一种语言配置您的环境变量，只要pull 下来docker，即可运行，容器中本身已经有了别人配置好的环境变量</p> <p>下面就以我们项目中用到的golang语言为例制作一个自己go语言项目的镜像，让你的前端小伙伴不用自己配置go语言环境，只要有docker就可以了</p> <p>关于下载docker的方法请自行搜索</p> <h2 id="编写dockerfile"><a href="#编写dockerfile" aria-hidden="true" class="header-anchor">#</a> 编写Dockerfile</h2> <ol><li><p>首先要明确的一个概念是一个空的docker容器就是一个linux系统，你想要在这个系统里面配置自己的环境，就和你在电脑上操作是一样的，都是通过敲入命令行，下载相应的软件，运行环境， 更改各种配置等等。 那么我们怎么做到这些呢，答案就是Dockerfle。 Dockerfile就是一个配置文件，名字就叫Docerfile， 要注意Dokerfile的位置，这和你进行拷贝等文件操作时的路径有关。 我的项目Dockerfile就放在项目的根目录下面</p></li> <li><p>我们自己的Dockerfile如下</p></li></ol> <div class="language- extra-class"><pre class="language-text"><code>FROM golang:latest  #表示拉取golang的基础镜像，也就是有golang环境的linux系统
+
+
+WORKDIR $GOPATH/src/github.com/earnsparemoney/backend #设置你的工作目录
+
+COPY . . #将当前目录下的所有文件拷贝进你的镜像中，就是你在本机上的文件
+RUN go get -d -v ./...  #获取项目的所有依赖，这个命令会自动查找你的项目依赖
+RUN go install -v ./... #安装依赖
+
+
+EXPOSE 443 #暴露容器端口443
+
+
+CMD go run main.go #运行程序
+</code></pre></div><h2 id="生成镜像"><a href="#生成镜像" aria-hidden="true" class="header-anchor">#</a> 生成镜像</h2> <p>这里需要特别说明的是，由于go会用到golang的包，而golang被墙了，我试了很多方法，都没有成功下载到golang的包，最后我在美国的服务器上才成功构建了镜像，如果你有更好的方法，欢迎告诉我。873421427@qq.com</p> <p>在你的Dockerfile目录下面，运行如下命令</p> <div class="language- extra-class"><pre class="language-text"><code>docker build -t godocker .  
+</code></pre></div><p>表示构建镜像 -t tag的缩写，表示给镜像个名字</p> <h2 id="上传镜像到dockerhub"><a href="#上传镜像到dockerhub" aria-hidden="true" class="header-anchor">#</a> 上传镜像到Dockerhub</h2> <p>如何把你的镜像分享给别人呢，正如可以在github上分享代码一样，也有dockhub帮助你分享你的镜像，在上面我们已经成功的构建了镜像，接下来就是要上传自己的镜像</p> <ol><li>首先在dockerhub上注册一个自己的账号</li> <li>在网站上创建一个仓库存放你的镜像， 取名为godocker，你可以自己取名字</li> <li>登陆，在本机的终端里面，输入命令</li></ol> <div class="language- extra-class"><pre class="language-text"><code>docker login
+</code></pre></div><ol start="4"><li>将之前制作好的镜像改一下tag，符合docker hub的上传格式</li></ol> <div class="language- extra-class"><pre class="language-text"><code>docker tag godocker zzt/godocker:version1.0
+</code></pre></div><p>zzt 是我的docker hub账户名， 后面的odocker指的是docker hub的仓库的名字， 前面的指的是刚才构建的image的名字，不要搞混, version1.0 指的是这个镜像的版本号,你可以自己起名字
+5. 上传image</p> <div class="language- extra-class"><pre class="language-text"><code>docker push zzt/godocker
+</code></pre></div><h2 id="从dockerhub下载镜像"><a href="#从dockerhub下载镜像" aria-hidden="true" class="header-anchor">#</a> 从DockerHub下载镜像</h2> <div class="language- extra-class"><pre class="language-text"><code>docker pull zzt/godocker:version1.0
+</code></pre></div><h2 id="运行镜像"><a href="#运行镜像" aria-hidden="true" class="header-anchor">#</a> 运行镜像</h2> <div class="language- extra-class"><pre class="language-text"><code>docker run -d -p 443:443 zzt/godocker:version1.0
+</code></pre></div><p>-d 指的是后台运行， -p指的是暴露本机的443端口， 对应container的443端口</p> <p>大功告成！！！！ 我透</p></div> <footer class="page-edit"><!----> <!----></footer> <div class="page-nav"><p class="inner"><!----> <span class="next"><a href="/Go 终于可以不翻墙下载golang.org 包了.html">
+          Go 终于可以不翻墙下载golang.org 包了
+        </a>
+        →
+      </span></p></div> </main></div><div class="global-ui"></div></div>
+    <script src="/assets/js/app.a5989d02.js" defer></script><script src="/assets/js/2.cb6da756.js" defer></script><script src="/assets/js/7.a272f739.js" defer></script>
+  </body>
+</html>
